@@ -3,195 +3,188 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Rebuild Spec – LOB SharePoint HTML Reports (Copilot Studio)</title>
+<title>Build Guide – LOB SharePoint HTML Reports (Copilot Studio)</title>
 <style>
   :root{--ink:#1f2328;--quiet:#59636e;--line:#d0d7de;--accent:#0969da;--tint:#f6f8fa}
-  body{font:15px/1.6 "Segoe UI",system-ui,-apple-system,Arial,sans-serif;color:var(--ink);max-width:980px;margin:40px auto;padding:0 24px}
-  h1{font-size:28px;margin:0 0 4px}
-  h2{font-size:21px;margin:40px 0 8px;border-bottom:1px solid var(--line);padding-bottom:4px}
-  h3{font-size:16px;margin:20px 0 6px}
+  body{font:16px/1.65 "Segoe UI",system-ui,-apple-system,Arial,sans-serif;color:var(--ink);max-width:960px;margin:40px auto;padding:0 24px}
+  h1{font-size:30px;margin:0 0 4px}
+  h2{font-size:23px;margin:48px 0 10px;border-bottom:2px solid var(--line);padding-bottom:4px}
+  h3{font-size:18px;margin:26px 0 8px}
+  h4{font-size:16px;margin:18px 0 6px}
   .sub{color:var(--quiet);margin:0 0 16px}
   nav{background:var(--tint);border:1px solid var(--line);border-radius:8px;padding:8px 20px;margin:16px 0}
-  table{border-collapse:collapse;width:100%;margin:8px 0 16px;font-size:14px}
-  th,td{border-bottom:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top}
+  table{border-collapse:collapse;width:100%;margin:10px 0 18px;font-size:15px}
+  th,td{border-bottom:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
   th{background:var(--tint)}
-  code{background:var(--tint);padding:1px 5px;border-radius:4px;font-size:13px;word-break:break-word}
-  pre{background:var(--tint);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow-x:auto;font-size:13px;line-height:1.45}
+  code{background:var(--tint);padding:1px 5px;border-radius:4px;font-size:14px;word-break:break-word}
+  pre{background:var(--tint);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow-x:auto;font-size:13.5px;line-height:1.5}
   pre code{background:none;padding:0}
-  li{margin:3px 0}
+  li{margin:5px 0}
   a{color:var(--accent)}
+  .box{border-radius:8px;padding:12px 16px;margin:14px 0}
+  .idea{background:#ddf4ff;border:1px solid #54aeff}
+  .why{background:#f6f8fa;border-left:4px solid #8c959f;padding:8px 14px;margin:8px 0;border-radius:0 6px 6px 0}
+  .warn{background:#fff8c5;border:1px solid #d4a72c}
+  .test{background:#dafbe1;border:1px solid #4ac26b}
+  .step{font-weight:600}
   .check li{list-style:none}
-  .check li::before{content:"\2610  ";}
+  .check li::before{content:"\2610  "}
 </style>
 </head>
 <body>
 
-<h1>LOB SharePoint HTML Report – Workflow Rebuild Spec</h1>
-<p class="sub">Copilot Studio (Microsoft Copilot harness) · node-by-node build guide · short version: <a href="architecture.html">architecture</a></p>
+<h1>Build guide: LOB SharePoint HTML reports</h1>
+<p class="sub">Step-by-step instructions for building the six workflows in Copilot Studio · read <a href="architecture.html">the overview</a> first (10 minutes)</p>
+
+<div class="box idea"><strong>How to use this guide:</strong> work through the parts in order. Each workflow section says what the workflow is for, then lists the actions to add, with the settings to type in and a short <em>Why</em> for each important step. Every part ends with a test. Don't start the next part until the test passes.</div>
 
 <nav><strong>Contents</strong>
 <ol>
-<li><a href="#overview">Overview</a></li><li><a href="#tables">Dataverse tables</a></li><li><a href="#inventory">Workflow inventory</a></li>
-<li><a href="#wf0">WF0 – Orchestrator</a></li><li><a href="#wf1">WF1 – Process LOB</a></li><li><a href="#wf2">WF2 – Summarize file</a></li>
-<li><a href="#wf3">WF3 – Roll up area</a></li><li><a href="#wf4">WF4 – Render LOB report</a></li><li><a href="#ops">Deletes, backfill and go-live</a></li>
+<li><a href="#before">Before you start</a></li>
+<li><a href="#basics">Five things to know about expressions</a></li>
+<li><a href="#tables">Part 1 – Create the Dataverse tables</a></li>
+<li><a href="#wf2">Part 2 – WF2 Summarize file</a></li>
+<li><a href="#wf3">Part 3 – WF3 Roll up area</a></li>
+<li><a href="#wf4">Part 4 – WF4 Render report</a></li>
+<li><a href="#wf1">Part 5 – WF1 Process LOB</a></li>
+<li><a href="#wf0">Part 6 – WF0 Orchestrator</a></li>
+<li><a href="#wf5">Part 7 – WF5 Weekly reconcile</a></li>
+<li><a href="#golive">Part 8 – First run and go-live</a></li>
+<li><a href="#trouble">Troubleshooting</a></li>
 </ol></nav>
 
-<h2 id="overview">1. Overview</h2>
-<p>Rebuild the 10 existing flows as 6 Copilot Studio workflows (Microsoft Copilot harness) that process only changed files and produce one HTML report per line of business (LOB). The requirement is unchanged; only the mechanics change.</p>
-<p><strong>Why the current build fails.</strong> Every run scans the whole site, and the report is generated from retrieval (RAG). Retrieval returns only the top few chunks, so a report over hundreds of folders is incomplete by design and varies run to run. Full scans also hit the 100-second agent limit, connector throttling (600 calls/min for SharePoint) and model context limits.</p>
-<p><strong>Target design in four rules</strong></p>
-<ol>
-<li><strong>Per-LOB isolation.</strong> Each LOB is processed by its own child run with its own watermark. One LOB failing never blocks the others.</li>
-<li><strong>Incremental only.</strong> Each run lists only files modified since that LOB's last successful run.</li>
-<li><strong>Summarize once, store forever.</strong> Each file is summarized once into Dataverse; it is re-summarized only when its ETag changes.</li>
-<li><strong>AI never writes HTML.</strong> Reports are assembled from stored summaries with deterministic expressions and a fixed template.</li>
-</ol>
-<p><strong>Assumed folder structure</strong> (adjust paths to yours):</p>
-<pre><code>Shared Documents/
-  &lt;LOB&gt;/                 &lt;- one report per LOB
-    &lt;Area&gt;/              &lt;- level-2 folder = report section
-      &lt;Sub-area&gt;/.../file  &lt;- any depth, shown as a breadcrumb</code></pre>
-<p>Output: <code>Reports/&lt;LOB&gt;.aspx</code> (or <code>.html</code> sent by Teams/Outlook), regenerated only when that LOB changed.</p>
+<div class="box warn"><strong>Why this build order?</strong> WF1 calls WF2, WF3 and WF4, and WF0 calls WF1. A workflow can only call another workflow that already exists, so we build the "inner" workflows first and work outwards.</div>
 
-<h2 id="tables">2. Dataverse tables</h2>
-<p>Create four tables in the same solution as the workflows. Add an alternate key where noted so lookups are a single filtered List rows.</p>
-
-<h3>LOB Config (<code>rpt_lobconfig</code>) – one row per LOB, the control panel</h3>
-<table>
-<tr><th>Column</th><th>Type</th><th>Notes</th></tr>
-<tr><td>Name</td><td>Text</td><td>LOB display name</td></tr>
-<tr><td>FolderPath</td><td>Text</td><td>e.g. <code>Shared Documents/Transmission</code> (no trailing slash)</td></tr>
-<tr><td>Enabled</td><td>Yes/No</td><td>Turn a LOB on/off without editing workflows</td></tr>
-<tr><td>LastSuccessfulRunUtc</td><td>Date/Time (UTC)</td><td>Watermark. Seed with <code>1900-01-01</code> for backfill</td></tr>
-<tr><td>ReportDirty</td><td>Yes/No</td><td>Set when anything in the LOB changed; cleared after render</td></tr>
-<tr><td>BatchSize</td><td>Whole number</td><td>Max files summarized per run (start 100)</td></tr>
-<tr><td>ReportFileName</td><td>Text</td><td>e.g. <code>Transmission.aspx</code></td></tr>
-<tr><td>LastReportUtc</td><td>Date/Time</td><td>Set by WF4</td></tr>
-</table>
-
-<h3>DocCatalog (<code>rpt_doccatalog</code>) – one row per file · alternate key <code>SpItemId</code></h3>
-<table>
-<tr><th>Column</th><th>Type</th><th>Notes</th></tr>
-<tr><td>SpItemId</td><td>Whole number</td><td>SharePoint item ID</td></tr>
-<tr><td>LOB</td><td>Lookup → LOB Config</td><td></td></tr>
-<tr><td>Area</td><td>Text</td><td>Level-2 folder (report section)</td></tr>
-<tr><td>Breadcrumb</td><td>Text</td><td>Sub-folders below Area, e.g. <code>Relays / 2026 / Q3</code></td></tr>
-<tr><td>FileName, FileUrl</td><td>Text, URL</td><td>Link shown in the report</td></tr>
-<tr><td>ETag</td><td>Text</td><td>Change detector</td></tr>
-<tr><td>ModifiedUtc, ModifiedBy</td><td>Date/Time, Text</td><td></td></tr>
-<tr><td>Status</td><td>Choice</td><td>Pending, Summarized, Failed, Deleted, Skipped</td></tr>
-<tr><td>Summary</td><td>Multiline text (4,000)</td><td>Plain-text summary</td></tr>
-<tr><td>SummaryJson</td><td>Multiline text (max)</td><td>Full prompt output</td></tr>
-<tr><td>Attempts</td><td>Whole number</td><td>Retry counter</td></tr>
-<tr><td>LastError</td><td>Multiline text</td><td></td></tr>
-<tr><td>LastSeenUtc</td><td>Date/Time</td><td>Used by the delete reconcile</td></tr>
-</table>
-
-<h3>FolderSummary (<code>rpt_foldersummary</code>) – one row per LOB + Area · alternate key <code>LOB</code> + <code>Area</code></h3>
-<table>
-<tr><th>Column</th><th>Type</th><th>Notes</th></tr>
-<tr><td>LOB</td><td>Lookup</td><td></td></tr>
-<tr><td>Area</td><td>Text</td><td></td></tr>
-<tr><td>Dirty</td><td>Yes/No</td><td>Set by WF1 when a file in the Area changes</td></tr>
-<tr><td>Overview</td><td>Multiline text</td><td>2–4 sentence roll-up</td></tr>
-<tr><td>ThemesJson</td><td>Multiline text</td><td><code>themes[]</code>, <code>recent_changes[]</code>, <code>open_actions[]</code></td></tr>
-<tr><td>FileCount, SummarizedCount</td><td>Whole number</td><td>Coverage per section</td></tr>
-</table>
-
-<h3>RunLog (<code>rpt_runlog</code>) – one row per LOB per run</h3>
-<p>LOB, RunStartUtc, FilesSeen, FilesQueued, FilesSummarized, FilesFailed, Rendered (Yes/No), Outcome (Succeeded/Failed), ErrorText, DurationSec.</p>
-
-<h2 id="inventory">3. Workflow inventory</h2>
-<p>Six small workflows replace the current ten; only WF0 and WF5 are scheduled, the rest are child workflows called in order by WF1 for one LOB at a time. See the diagram in <a href="architecture.html">architecture.html</a>.</p>
-<table>
-<tr><th>Workflow</th><th>Trigger</th><th>Calls / writes</th></tr>
-<tr><td>WF0 Orchestrator</td><td>Recurrence 30 min</td><td>WF1 per enabled LOB</td></tr>
-<tr><td>WF1 Process LOB</td><td>Child</td><td>DocCatalog, FolderSummary, LOB Config, RunLog; calls WF2 → WF3 → WF4</td></tr>
-<tr><td>WF2 Summarize file</td><td>Child</td><td>DocCatalog</td></tr>
-<tr><td>WF3 Roll up area</td><td>Child</td><td>FolderSummary</td></tr>
-<tr><td>WF4 Render LOB report</td><td>Child</td><td>Report file, LOB Config</td></tr>
-<tr><td>WF5 Weekly reconcile</td><td>Recurrence weekly</td><td>DocCatalog (Deleted), dirty flags</td></tr>
-</table>
-
-<h2 id="wf0">4. WF0 – Orchestrator (scheduled)</h2>
-<p>WF0 does no work itself: it fans out one child run per enabled LOB and never overlaps with its previous run.</p>
-<ol>
-<li><strong>Trigger: Recurrence</strong>, every 30 minutes (Settings → <strong>Concurrency control On, degree 1</strong>, so a slow run is never doubled up).</li>
-<li><strong>Dataverse – List rows</strong> <code>LOB Config</code>, Filter <code>rpt_enabled eq true</code>, Select columns <code>rpt_lobconfigid,rpt_name</code>.</li>
-<li><strong>Apply to each</strong> LOB row (Settings → Concurrency <strong>3</strong>; raise to 5 once stable).
-  <ol>
-  <li><strong>Run a child workflow</strong> → <code>WF1 – Process LOB</code>, input <code>LobId = items('Apply_to_each')?['rpt_lobconfigid']</code>.</li>
-  <li>Configure run after on the next step = <em>is successful, has failed, has timed out</em>, so one LOB failure does not stop the loop.</li>
-  </ol></li>
-<li><strong>Compose <code>RunSummary</code></strong> (optional): count of LOBs processed, for a Teams alert if any child failed.</li>
-</ol>
-<p>Keep WF0 this thin. All logic, error handling and the watermark live in WF1, per LOB.</p>
-
-<h2 id="wf1">5. WF1 – Process LOB (child)</h2>
-<p>WF1 replaces the full scan: it lists only files modified in this LOB since its watermark, queues them, then runs summarize, roll-up and render for that LOB alone.</p>
-<p><strong>Trigger:</strong> <em>When a workflow is called by another workflow</em> (child), input <code>LobId</code> (text).</p>
-<h3>Init</h3>
-<ol>
-<li><strong>Dataverse – Get a row by ID</strong> <code>LOB Config</code> = <code>LobId</code>.</li>
-<li><strong>Compose <code>RunStart</code></strong> = <code>utcNow()</code>.</li>
-<li><strong>Compose <code>Since</code></strong> = <code>formatDateTime(addMinutes(outputs('Get_LOB')?['body/rpt_lastsuccessfulrunutc'], -10), 'yyyy-MM-ddTHH:mm:ssZ')</code> (10-min overlap; ETag check removes duplicates).</li>
-</ol>
-<h3>Scope <code>Try</code></h3>
-<ol start="4">
-<li><strong>SharePoint – Get files (properties only)</strong>
-  <ul>
-  <li>Library: <code>Documents</code></li>
-  <li>Limit entries to folder: <code>@{outputs('Get_LOB')?['body/rpt_folderpath']}</code></li>
-  <li>Include nested items: <strong>Yes</strong></li>
-  <li>Filter Query: <code>Modified ge '@{outputs('Since')}' and FSObjType eq 0</code> (files only; if <code>FSObjType</code> is rejected, drop it and add a Filter array on <code>{IsFolder}</code> = false)</li>
-  <li>Settings → <strong>Pagination On</strong>, threshold 20000</li>
-  </ul></li>
-<li><strong>Apply to each</strong> file (Concurrency 10). Inside:
-  <ol>
-  <li><strong>Compose <code>Parts</code></strong> = <code>split(item()?['{Path}'], '/')</code></li>
-  <li><strong>Compose <code>Area</code></strong> = <code>if(greater(length(outputs('Parts')), 3), outputs('Parts')[2], 'General')</code></li>
-  <li><strong>Compose <code>Breadcrumb</code></strong> = <code>join(take(skip(outputs('Parts'), 3), max(0, sub(length(outputs('Parts')), 4))), ' / ')</code></li>
-  <li><strong>Dataverse – List rows</strong> <code>DocCatalog</code>, Filter <code>rpt_spitemid eq @{item()?['ID']}</code>, Row count 1.</li>
-  <li><strong>Condition</strong> <code>empty(outputs('List_existing')?['body/value'])</code>
-    <ul>
-    <li><strong>Yes → Add a new row:</strong> SpItemId, LOB, Area, Breadcrumb, FileName <code>{Name}</code>, FileUrl <code>{Link}</code>, ETag <code>@odata.etag</code>, ModifiedUtc, ModifiedBy, Status <strong>Pending</strong>, Attempts 0.</li>
-    <li><strong>No → Condition</strong> stored ETag ≠ <code>item()?['@odata.etag']</code> → <strong>Update a row</strong>: same fields, Status <strong>Pending</strong>, Attempts 0. Equal ETag → do nothing.</li>
-    </ul></li>
-  </ol></li>
-<li><strong>Select <code>ChangedAreas</code></strong> from the Get files output: map each item to <code>if(greater(length(split(item()?['{Path}'],'/')),3), split(item()?['{Path}'],'/')[2], 'General')</code>, then <strong>Compose <code>DistinctAreas</code></strong> = <code>union(body('ChangedAreas'), body('ChangedAreas'))</code>.</li>
-<li><strong>Apply to each</strong> area (Concurrency <strong>1</strong>): upsert <code>FolderSummary</code> (LOB + Area) with <strong>Dirty = Yes</strong>.</li>
-<li><strong>Condition</strong> <code>greater(length(body('Get_files')?['value']), 0)</code> → <strong>Update LOB Config</strong> ReportDirty = <strong>Yes</strong>.</li>
-<li><strong>Dataverse – List rows</strong> <code>DocCatalog</code>, Filter <code>_rpt_lob_value eq @{LobId} and rpt_status eq &lt;Pending&gt;</code>, Sort <code>rpt_modifiedutc asc</code>, Row count = <code>BatchSize</code>.</li>
-<li><strong>Apply to each</strong> pending row (Concurrency 5) → <strong>Run child workflow</strong> <code>WF2 – Summarize file</code>, input <code>CatalogId</code>.</li>
-<li><strong>List rows</strong> <code>FolderSummary</code> where LOB = this LOB and Dirty = Yes → <strong>Apply to each</strong> (Concurrency 3) → <strong>Run child workflow</strong> <code>WF3 – Roll up area</code>.</li>
-<li><strong>Get a row</strong> LOB Config again → <strong>Condition</strong> ReportDirty = Yes → <strong>Run child workflow</strong> <code>WF4 – Render LOB report</code>.</li>
-<li><strong>Update LOB Config:</strong> <code>LastSuccessfulRunUtc = outputs('RunStart')</code>.</li>
-<li><strong>Add RunLog row</strong>, Outcome = Succeeded.</li>
-</ol>
-<h3>Scope <code>Catch</code> (run after Try <em>has failed / timed out</em>)</h3>
-<ol start="15">
-<li><strong>Add RunLog row</strong>, Outcome = Failed, ErrorText = <code>string(result('Try'))</code>. <strong>Do not move the watermark</strong>: the next run retries the same window.</li>
-</ol>
-<h3>One-time library settings</h3>
-<ul>
-<li>Library settings → Indexed columns → <strong>index <code>Modified</code></strong>. Without it, the filtered query on a large library can fail on the 5,000-item list view threshold.</li>
-<li>If your library name or root differs, shift the <code>Parts</code> index offsets (Area = index 2 assumes <code>Library/LOB/Area/…</code>).</li>
+<!-- ============================================================ -->
+<h2 id="before">Before you start</h2>
+<p>Check you have all of these. Ask your lead if anything is missing.</p>
+<ul class="check">
+<li>Maker access to the Power Platform environment where Copilot Studio runs (it must have Dataverse).</li>
+<li>Edit access to the SharePoint site. For publishing reports as <code>.aspx</code> you'll also need a <strong>site owner</strong> account for the save step (see Part 4).</li>
+<li>The library name (usually <code>Documents</code>, shown as "Shared Documents" in paths) and the list of LOB folder names.</li>
+<li>Someone with library settings access has <strong>indexed the <code>Modified</code> column</strong>: Library settings → Indexed columns → Create a new index → Modified.
+  <div class="why"><strong>Why:</strong> our query asks "files modified since X". On a library with more than 5,000 files, SharePoint refuses that query unless the column is indexed.</div></li>
+<li>A <strong>solution</strong> created in the environment (e.g. "LOB Reports"). Create every table and workflow <em>inside</em> it.
+  <div class="why"><strong>Why:</strong> a solution keeps all the parts together so they can be moved from dev to production as one package.</div></li>
 </ul>
 
-<h2 id="wf2">6. WF2 – Summarize file (child)</h2>
-<p>WF2 turns one file into one small, validated JSON summary and records success or failure on its catalog row; it never touches HTML.</p>
-<p><strong>Trigger:</strong> child workflow, input <code>CatalogId</code>.</p>
+<h3>The folder layout this guide assumes</h3>
+<pre><code>Shared Documents/              (the library)
+  Transmission/                (a LOB  → gets its own report)
+    Protection/                (an Area → a section in the report)
+      Relays/2026/Q3/file.pdf  (deeper folders → shown as a breadcrumb "Relays / 2026 / Q3")</code></pre>
+<p>If your library is laid out differently, the only thing to change is the folder-position numbers in Part 5 (explained there).</p>
+
+<!-- ============================================================ -->
+<h2 id="basics">Five things to know about expressions</h2>
+<p>Many steps ask you to type an <strong>expression</strong> (a small formula) into a field. If you haven't used them before, read this first.</p>
 <ol>
-<li><strong>Get a row by ID</strong> <code>DocCatalog</code>.</li>
-<li><strong>Condition: supported type?</strong> extension in <code>pdf, docx, pptx, xlsx, txt, md</code>, and file size under your cap (start at 15 MB). No → <strong>Update row</strong> Status <strong>Skipped</strong>, Summary = <code>File type not summarized</code>, then stop. Skipped files still list in the report with name and link.</li>
-<li><strong>SharePoint – Get file content</strong> (by ID/path from the row).</li>
-<li><strong>Run a prompt</strong> (AI capabilities). Pass the file as a document input; for <code>txt/md/xlsx</code> pass extracted text cut to the first 30,000 characters with <code>substring(text, 0, min(length(text), 30000))</code>.</li>
-<li><strong>Parse JSON</strong> on the prompt output using the schema below.</li>
-<li><strong>Update row:</strong> Status <strong>Summarized</strong>, Summary = <code>body('Parse_JSON')?['summary']</code>, SummaryJson = full output, LastError empty.</li>
-<li><strong>Scope <code>Catch</code></strong> (run after 3–6 <em>failed / timed out</em>): Attempts + 1; Status = <code>if(greaterOrEquals(add(Attempts,1),3),'Failed','Pending')</code>; LastError = error message. A Pending row is retried on the next run; after 3 tries it stays Failed and shows in the report banner.</li>
+<li><strong>Where to type them:</strong> click in the field, open the expression editor (the <em>fx</em> button), paste the expression, and click Add/OK. Don't paste expressions as plain text, or they will be treated as text.</li>
+<li><strong>Action names matter.</strong> An expression like <code>outputs('Get_LOB')</code> means "the output of the action named <em>Get LOB</em>". Spaces become underscores. <strong>Rename each action exactly as this guide says</strong> (click the action's title to rename it), or the expressions won't find it.</li>
+<li><strong><code>?['name']</code> reads a field.</strong> <code>item()?['Name']</code> means "the <em>Name</em> field of the current item". The <code>?</code> stops the workflow from crashing if the field is empty.</li>
+<li><strong><code>item()</code> means "the current row"</strong> inside a loop (<em>Apply to each</em>) or inside a <em>Select</em> / <em>Filter array</em>.</li>
+<li><strong>Dataverse column names have a prefix.</strong> This guide uses <code>rpt_</code> (e.g. <code>rpt_status</code>). Your environment's prefix may be different. Check the column's <em>logical name</em> in the table designer and replace <code>rpt_</code> everywhere if needed.</li>
 </ol>
-<p>Settings: retry policy <em>Exponential, 4 retries</em> on Get file content and Run a prompt (absorbs 429 throttling).</p>
-<h3>Prompt instructions (paste into the prompt node)</h3>
+
+<!-- ============================================================ -->
+<h2 id="tables">Part 1 – Create the Dataverse tables</h2>
+<p><strong>Goal:</strong> create the four tables the workflows read and write. Tables are like spreadsheets: each has columns, and each row is one record.</p>
+<p>In your solution: <em>New → Table</em>. For each table below, add the columns listed. Column types are exactly as shown.</p>
+
+<h3>Table 1: LOB Config</h3>
+<p>One row per LOB. This is the "control panel": you switch LOBs on and off here without editing any workflow.</p>
+<table>
+<tr><th>Column</th><th>Type</th><th>What it's for</th></tr>
+<tr><td>Name</td><td>Text (primary column)</td><td>The LOB's display name, e.g. "Transmission"</td></tr>
+<tr><td>FolderPath</td><td>Text</td><td>The LOB's folder, e.g. <code>Shared Documents/Transmission</code> (no slash at the end)</td></tr>
+<tr><td>Enabled</td><td>Yes/No</td><td>Only LOBs set to Yes are processed</td></tr>
+<tr><td>LastSuccessfulRunUtc</td><td>Date and time</td><td>The <strong>watermark</strong>: when this LOB last ran successfully. Set it to 1900-01-01 for a brand-new LOB so the first run picks up every file.</td></tr>
+<tr><td>ReportDirty</td><td>Yes/No</td><td>Yes = something changed, so the report needs rebuilding</td></tr>
+<tr><td>BatchSize</td><td>Whole number</td><td>Maximum files to summarize per run. Start with 100.</td></tr>
+<tr><td>ReportFileName</td><td>Text</td><td>Name of the report file, e.g. <code>Transmission.aspx</code></td></tr>
+<tr><td>LastReportUtc</td><td>Date and time</td><td>When the report was last built</td></tr>
+</table>
+
+<h3>Table 2: DocCatalog</h3>
+<p>One row per SharePoint file. This is our "card catalog".</p>
+<table>
+<tr><th>Column</th><th>Type</th><th>What it's for</th></tr>
+<tr><td>FileName</td><td>Text (primary column)</td><td>The file's name</td></tr>
+<tr><td>SpItemId</td><td>Whole number</td><td>SharePoint's ID for the file. We use it to find the row again.</td></tr>
+<tr><td>LOB</td><td>Lookup → LOB Config</td><td>Which LOB the file belongs to</td></tr>
+<tr><td>Area</td><td>Text</td><td>The area (report section) the file is in</td></tr>
+<tr><td>Breadcrumb</td><td>Text</td><td>Deeper folders, e.g. <code>Relays / 2026 / Q3</code></td></tr>
+<tr><td>FileUrl</td><td>URL</td><td>Link to the file, shown in the report</td></tr>
+<tr><td>ETag</td><td>Text</td><td>SharePoint's version tag. If it changes, the file changed.</td></tr>
+<tr><td>ModifiedUtc</td><td>Date and time</td><td>When the file was last modified</td></tr>
+<tr><td>ModifiedBy</td><td>Text</td><td>Who modified it</td></tr>
+<tr><td>Status</td><td>Choice: Pending, Summarized, Failed, Skipped, Deleted</td><td>Where the file is in the process</td></tr>
+<tr><td>Summary</td><td>Multiple lines of text (max 4,000)</td><td>The short AI summary shown in the report</td></tr>
+<tr><td>SummaryJson</td><td>Multiple lines of text (max length)</td><td>The full AI answer, kept for later use</td></tr>
+<tr><td>Attempts</td><td>Whole number</td><td>How many times summarizing has failed</td></tr>
+<tr><td>LastError</td><td>Multiple lines of text</td><td>The last error message, for troubleshooting</td></tr>
+</table>
+<p>After creating it, add a <strong>key</strong> (Keys → New key) on <code>SpItemId</code>. <span class="why" style="display:block"><strong>Why:</strong> a key stops two rows being created for the same file.</span></p>
+
+<h3>Table 3: FolderSummary</h3>
+<p>One row per area inside a LOB.</p>
+<table>
+<tr><th>Column</th><th>Type</th><th>What it's for</th></tr>
+<tr><td>Area</td><td>Text (primary column)</td><td>The area name</td></tr>
+<tr><td>LOB</td><td>Lookup → LOB Config</td><td>Which LOB it belongs to</td></tr>
+<tr><td>Dirty</td><td>Yes/No</td><td>Yes = a file in this area changed, so the overview needs rewriting</td></tr>
+<tr><td>Overview</td><td>Multiple lines of text</td><td>The AI's 2–4 sentence overview of the area</td></tr>
+<tr><td>ThemesJson</td><td>Multiple lines of text</td><td>Themes, recent changes and open actions (from the AI)</td></tr>
+<tr><td>FileCount</td><td>Whole number</td><td>Number of files in the area</td></tr>
+<tr><td>SummarizedCount</td><td>Whole number</td><td>How many of them have summaries</td></tr>
+</table>
+<p>Add a key on <strong>LOB + Area</strong> together.</p>
+
+<h3>Table 4: RunLog</h3>
+<p>One row each time a LOB is processed. Used for checking what happened.</p>
+<p>Columns: <strong>LOB</strong> (Lookup), <strong>RunStartUtc</strong> (Date and time), <strong>FilesSeen</strong>, <strong>FilesSummarized</strong>, <strong>FilesFailed</strong> (Whole numbers), <strong>Outcome</strong> (Choice: Succeeded, Failed), <strong>ErrorText</strong> (Multiple lines of text).</p>
+
+<div class="box test"><strong>Test Part 1:</strong> add one row to LOB Config by hand for a small test LOB: Enabled = Yes, LastSuccessfulRunUtc = 1900-01-01, BatchSize = 20, ReportFileName = <code>Test.aspx</code>. You'll use it in every test below.</div>
+
+<!-- ============================================================ -->
+<h2 id="wf2">Part 2 – WF2 Summarize file</h2>
+<p><strong>Goal:</strong> given one row in DocCatalog, read that file from SharePoint, ask the AI for a short summary, and save it on the row.</p>
+<p><strong>Input:</strong> <code>CatalogId</code> (the ID of the DocCatalog row). <strong>Output:</strong> the row is updated to Summarized, Skipped, Pending (will retry) or Failed.</p>
+
+<h3>Steps</h3>
+<ol>
+<li><span class="step">New workflow</span> named <code>WF2 Summarize file</code>. Choose the trigger for a workflow that is <strong>called by another workflow</strong> (child workflow). Add one text input: <code>CatalogId</code>.</li>
+<li><span class="step">Add Dataverse "Get a row by ID"</span>, rename it <code>Get_Row</code>. Table: DocCatalog. Row ID: the <code>CatalogId</code> input.</li>
+<li><span class="step">Add a Condition</span> named <code>Is_supported</code>: check the file extension is one of <code>pdf, docx, pptx, xlsx, txt, md</code>.
+  <ul>
+  <li><strong>If no:</strong> add "Update a row" → Status = <em>Skipped</em>, Summary = <code>File type not summarized</code>. Then add a <em>Terminate</em> action with status Succeeded.</li>
+  </ul>
+  <div class="why"><strong>Why:</strong> files like videos or zip files can't be summarized. We still list them in the report, just without a summary.</div></li>
+<li><span class="step">Add a Scope</span> named <code>Try</code>. Put the next four actions inside it.
+  <div class="why"><strong>Why:</strong> a Scope groups actions. If anything inside fails, we can catch the error in one place (step 9) instead of the whole workflow crashing.</div></li>
+<li><span class="step">Inside Try: SharePoint "Get file content"</span> using the file's ID or path from <code>Get_Row</code>. Rename it <code>Get_File</code>.</li>
+<li><span class="step">Inside Try: "Run a prompt"</span> (under AI capabilities). Rename it <code>Summarize</code>. Paste the prompt below, and give it the file as a document input. Set the output to <strong>JSON</strong> and paste the schema below.</li>
+<li><span class="step">Inside Try: "Parse JSON"</span>. Content = the prompt's output. Schema = the same schema. Rename it <code>Parse_JSON</code>.
+  <div class="why"><strong>Why:</strong> Parse JSON checks the AI really returned the fields we asked for. If it didn't, this step fails and we retry later instead of saving garbage.</div></li>
+<li><span class="step">Inside Try: "Update a row"</span> on DocCatalog (row ID = <code>CatalogId</code>):
+  <ul>
+  <li>Status = <em>Summarized</em></li>
+  <li>Summary = <code>body('Parse_JSON')?['summary']</code></li>
+  <li>SummaryJson = the prompt's whole output</li>
+  <li>LastError = empty</li>
+  </ul></li>
+<li><span class="step">Add a second Scope</span> named <code>Catch</code>, after Try. Open its <em>Settings → Run after</em> and tick only <strong>has failed</strong> and <strong>has timed out</strong>. Inside it add "Update a row":
+  <ul>
+  <li>Attempts = <code>add(outputs('Get_Row')?['body/rpt_attempts'], 1)</code> (add one to the counter)</li>
+  <li>Status = <code>if(greaterOrEquals(add(outputs('Get_Row')?['body/rpt_attempts'], 1), 3), 'Failed', 'Pending')</code></li>
+  <li>LastError = the error message</li>
+  </ul>
+  <div class="why"><strong>In plain words:</strong> "add 1 to the failure count; if it has now failed 3 times, mark it Failed, otherwise leave it Pending so the next run tries again." (For a Choice column you may need to pick the option's number instead of typing the word.)</div></li>
+<li><span class="step">Retry settings:</span> on <code>Get_File</code> and <code>Summarize</code>, open Settings → Retry policy → <strong>Exponential</strong>, count 4.
+  <div class="why"><strong>Why:</strong> if SharePoint or the AI is busy (error 429 "too many requests"), the action waits and tries again automatically.</div></li>
+</ol>
+
+<h3>The prompt (paste into "Run a prompt")</h3>
 <pre><code>You summarize one document from the {LOB} line of business for a status report.
 Use only the document. If something is not stated, return an empty string or empty list.
 Return ONLY valid JSON matching the schema. No markdown, no HTML, no commentary.
@@ -200,8 +193,10 @@ key_points: at most 5 items, each under 20 words.
 actions_or_risks: open actions, deadlines or risks stated in the document.
 
 File: {FileName}  |  Folder: {Area} / {Breadcrumb}  |  Modified: {ModifiedUtc}
-Document: {document input or text}</code></pre>
-<h3>Output JSON schema (set as the prompt's JSON output and in Parse JSON)</h3>
+Document: {the file}</code></pre>
+<p>The words in <code>{ }</code> are inputs: create them in the prompt and map them to fields from <code>Get_Row</code>.</p>
+
+<h3>The JSON schema</h3>
 <pre><code>{
   "type": "object",
   "properties": {
@@ -215,49 +210,99 @@ Document: {document input or text}</code></pre>
   },
   "required": ["title","doc_type","summary","key_points"]
 }</code></pre>
-<p>Use a prompt node, not an agent node: one file needs no tools or reasoning loop, and the prompt is cheaper, faster and more consistent.</p>
 
-<h2 id="wf3">7. WF3 – Roll up area (child)</h2>
-<p>WF3 writes the section overview for one Area from its stored file summaries only, never from raw files, so input size stays bounded however deep the sub-folders go.</p>
-<p><strong>Trigger:</strong> child workflow, input <code>FolderSummaryId</code>.</p>
-<ol>
-<li><strong>Get a row by ID</strong> <code>FolderSummary</code> (gives LOB + Area).</li>
-<li><strong>List rows</strong> <code>DocCatalog</code> where LOB = this LOB, Area = this Area, Status = Summarized; Select columns <code>rpt_filename, rpt_breadcrumb, rpt_modifiedutc, rpt_summary</code> only; Sort <code>rpt_modifiedutc desc</code>; <strong>Pagination On</strong>.</li>
-<li><strong>Select <code>Lines</code></strong> → <code>concat(item()?['rpt_breadcrumb'], ' | ', item()?['rpt_filename'], ' | ', formatDateTime(item()?['rpt_modifiedutc'],'yyyy-MM-dd'), ' | ', item()?['rpt_summary'])</code>.</li>
-<li><strong>Condition</strong> <code>lessOrEquals(length(body('Lines')), 60)</code>
-  <ul>
-  <li><strong>Yes → Run a prompt</strong> "Area roll-up" with <code>join(body('Lines'), decodeUriComponent('%0A'))</code>.</li>
-  <li><strong>No →</strong> batch: <strong>Apply to each</strong> over <code>chunk(body('Lines'), 60)</code> (Concurrency 1) → prompt each chunk → <strong>Append to array</strong> <code>Partials</code> → one final prompt over <code>join(variables('Partials'), …)</code>.</li>
-  </ul></li>
-<li><strong>Parse JSON</strong> → <strong>Update row</strong> <code>FolderSummary</code>: Overview, ThemesJson, FileCount (all rows in Area), SummarizedCount, <strong>Dirty = No</strong>.</li>
-</ol>
-<p><strong>Roll-up prompt:</strong> "You are given one-line summaries of files in the {Area} area of {LOB}. Return ONLY JSON: <code>overview</code> (2–4 sentences), <code>themes</code> (≤5), <code>recent_changes</code> (≤5, newest first, cite file names), <code>open_actions</code> (≤5). Use only the lines given."</p>
-<p>Run it only for Dirty areas (WF1 step 11), so an unchanged Area costs nothing.</p>
+<div class="box warn"><strong>Common mistake:</strong> using an <em>agent</em> node here instead of "Run a prompt". Summarizing one file needs no tools or searching; a prompt is cheaper, faster and gives more consistent results.</div>
 
-<h2 id="wf4">8. WF4 – Render LOB report (child, no AI)</h2>
-<p>WF4 builds one complete, well-formed HTML file per LOB from Dataverse alone, using Select/Join and a fixed template; the output is identical in structure every run.</p>
-<p><strong>Trigger:</strong> child workflow, input <code>LobId</code>.</p>
-<p><strong>Escape rule.</strong> Wrap every text value you insert in this expression (written below as <code>E(x)</code>); unescaped <code>&amp;</code>, <code>&lt;</code> or quotes from file names and summaries are the usual cause of broken HTML:</p>
-<pre><code>replace(replace(replace(replace(coalesce(x,''),'&amp;','&amp;amp;'),'&lt;','&amp;lt;'),'&gt;','&amp;gt;'),'"','&amp;quot;')</code></pre>
+<div class="box test"><strong>Test Part 2:</strong> add a DocCatalog row by hand for one real PDF in your test LOB (Status = Pending, Attempts = 0). Run WF2 with that row's ID. Check the row now says Summarized and has a sensible summary. Then try a <code>.zip</code> file and check it becomes Skipped.</div>
+
+<!-- ============================================================ -->
+<h2 id="wf3">Part 3 – WF3 Roll up area</h2>
+<p><strong>Goal:</strong> write a short overview for one area, using only the saved file summaries (never the files themselves).</p>
+<p><strong>Input:</strong> <code>FolderSummaryId</code>. <strong>Output:</strong> the FolderSummary row gets an Overview and is marked not Dirty.</p>
+<div class="why"><strong>Why summaries and not files?</strong> An area might have hundreds of files. One line per file is small enough for the AI to read at once; hundreds of full files are not.</div>
+
 <h3>Steps</h3>
 <ol>
-<li><strong>Get a row</strong> <code>LOB Config</code>.</li>
-<li><strong>List rows</strong> <code>FolderSummary</code> for this LOB, Sort <code>rpt_area asc</code>.</li>
-<li><strong>List rows</strong> <code>DocCatalog</code> for this LOB, Status ≠ Deleted, Select only <code>rpt_area, rpt_breadcrumb, rpt_filename, rpt_fileurl, rpt_modifiedutc, rpt_status, rpt_summary</code>, <strong>Pagination On</strong>.</li>
-<li><strong>Coverage counts:</strong> four <strong>Filter array</strong> actions on step 3 (Summarized, Pending, Failed, Skipped) → <code>length(body('Filter_x'))</code>.</li>
-<li><strong>Select <code>Toc</code></strong> from step 2 → <code>concat('&lt;li&gt;&lt;a href="#', &lt;slug&gt;, '"&gt;', E(item()?['rpt_area']), ' (', item()?['rpt_filecount'], ')&lt;/a&gt;&lt;/li&gt;')</code>, where <code>&lt;slug&gt;</code> = <code>concat('a-', replace(uriComponent(toLower(item()?['rpt_area'])), '%', '-'))</code>.</li>
-<li><strong>Initialize variable</strong> <code>Sections</code> (Array).</li>
-<li><strong>Apply to each</strong> FolderSummary row – Settings → <strong>Concurrency OFF (1)</strong>. Appending in parallel is what scrambles or drops sections.
-  <ol>
-  <li><strong>Filter array</strong> step 3 where <code>rpt_area</code> = current Area.</li>
-  <li><strong>Select <code>FileRows</code></strong> → <code>concat('&lt;tr&gt;&lt;td&gt;&lt;a href="', item()?['rpt_fileurl'], '"&gt;', E(item()?['rpt_filename']), '&lt;/a&gt;&lt;/td&gt;&lt;td&gt;', E(item()?['rpt_breadcrumb']), '&lt;/td&gt;&lt;td&gt;', formatDateTime(item()?['rpt_modifiedutc'],'yyyy-MM-dd'), '&lt;/td&gt;&lt;td&gt;', E(item()?['rpt_summary']), '&lt;/td&gt;&lt;/tr&gt;')</code></li>
-  <li><strong>Append to array</strong> <code>Sections</code>: <code>concat('&lt;section id="', &lt;slug&gt;, '"&gt;&lt;h2&gt;', E(area), '&lt;/h2&gt;&lt;p class="ov"&gt;', E(overview), '&lt;/p&gt;&lt;table&gt;&lt;thead&gt;&lt;tr&gt;&lt;th&gt;File&lt;/th&gt;&lt;th&gt;Folder&lt;/th&gt;&lt;th&gt;Modified&lt;/th&gt;&lt;th&gt;Summary&lt;/th&gt;&lt;/tr&gt;&lt;/thead&gt;&lt;tbody&gt;', join(body('FileRows'), ''), '&lt;/tbody&gt;&lt;/table&gt;&lt;/section&gt;')</code></li>
-  </ol></li>
-<li><strong>Compose <code>Html</code></strong>: paste the template below; it pulls in the counts, <code>join(body('Toc'),'')</code> and <code>join(variables('Sections'),'')</code>.</li>
-<li><strong>Save the file</strong> to <code>Reports/&lt;ReportFileName&gt;</code>: <em>Get file metadata using path</em> → exists ? <strong>Update file</strong> : <strong>Create file</strong>.</li>
-<li><strong>Update LOB Config:</strong> ReportDirty = No, LastReportUtc = <code>utcNow()</code>.</li>
+<li><span class="step">New workflow</span> <code>WF3 Roll up area</code>, child trigger, text input <code>FolderSummaryId</code>.</li>
+<li><span class="step">Get a row by ID</span> on FolderSummary. Rename it <code>Get_Area</code>. This tells us the LOB and the Area.</li>
+<li><span class="step">List rows</span> on DocCatalog, renamed <code>List_Files</code>:
+  <ul>
+  <li>Filter rows: this LOB, this Area, Status = Summarized</li>
+  <li>Select columns: <code>rpt_filename,rpt_breadcrumb,rpt_modifiedutc,rpt_summary</code> (only what we need; makes it faster)</li>
+  <li>Sort by: <code>rpt_modifiedutc desc</code> (newest first)</li>
+  <li>Settings → <strong>Pagination on</strong>, threshold 5000. <em>Why:</em> without it you only get the first page of rows.</li>
+  </ul></li>
+<li><span class="step">Select</span> (Data operations), renamed <code>Lines</code>. From = <code>List_Files</code> value. Switch to text mode and use:
+<pre><code>concat(item()?['rpt_breadcrumb'], ' | ', item()?['rpt_filename'], ' | ',
+       formatDateTime(item()?['rpt_modifiedutc'],'yyyy-MM-dd'), ' | ', item()?['rpt_summary'])</code></pre>
+  <div class="why"><strong>In plain words:</strong> turn each file into one line like <code>Relays / 2026 | test-report.pdf | 2026-11-02 | Summary text…</code></div></li>
+<li><span class="step">Condition</span>: is the number of lines 60 or fewer? <code>lessOrEquals(length(body('Lines')), 60)</code>
+  <ul>
+  <li><strong>Yes:</strong> "Run a prompt" (the roll-up prompt below) with all the lines joined into one text: <code>join(body('Lines'), decodeUriComponent('%0A'))</code> (<code>%0A</code> is a line break).</li>
+  <li><strong>No:</strong> split the lines into groups of 60 with <code>chunk(body('Lines'), 60)</code>, loop over the groups (concurrency 1), run the prompt on each group, collect the answers in an array variable, then run the prompt one last time over the collected answers.</li>
+  </ul>
+  <div class="why"><strong>Why split at 60?</strong> It keeps each AI request small enough to be reliable. You can adjust the number later.</div></li>
+<li><span class="step">Parse JSON</span> on the prompt output, then <span class="step">Update a row</span> on FolderSummary: Overview, ThemesJson, FileCount, SummarizedCount, and <strong>Dirty = No</strong>.</li>
 </ol>
-<h3>Template for <code>Compose Html</code></h3>
+
+<h3>Roll-up prompt</h3>
+<pre><code>You are given one-line summaries of files in the {Area} area of {LOB}.
+Return ONLY JSON with these fields:
+  overview: 2-4 sentences describing what this area contains
+  themes: up to 5 short themes
+  recent_changes: up to 5 items, newest first, mention file names
+  open_actions: up to 5 open actions or risks
+Use only the lines given.</code></pre>
+
+<div class="box test"><strong>Test Part 3:</strong> summarize 3–4 files in one area with WF2, create a FolderSummary row for that area by hand (Dirty = Yes), run WF3 with its ID, and check the Overview makes sense.</div>
+
+<!-- ============================================================ -->
+<h2 id="wf4">Part 4 – WF4 Render report</h2>
+<p><strong>Goal:</strong> build the HTML report for one LOB from the saved data, and save the file. <strong>There is no AI in this workflow.</strong></p>
+<p><strong>Input:</strong> <code>LobId</code>. <strong>Output:</strong> the report file in the Reports folder.</p>
+
+<h3>First: the escaping rule</h3>
+<p>Before putting any text into HTML (a file name, a summary), you must <strong>escape</strong> it. Otherwise a file called <code>Q3 &lt;draft&gt; &amp; notes</code> breaks the page, because <code>&lt;</code> and <code>&amp;</code> have special meaning in HTML.</p>
+<p>Wherever this guide writes <code>E(something)</code>, use this full expression with <em>something</em> in place of <code>x</code>:</p>
+<pre><code>replace(replace(replace(replace(coalesce(x,''),'&amp;','&amp;amp;'),'&lt;','&amp;lt;'),'&gt;','&amp;gt;'),'"','&amp;quot;')</code></pre>
+<div class="why"><strong>In plain words:</strong> "if it's empty use blank text; then replace &amp; with &amp;amp;, &lt; with &amp;lt;, &gt; with &amp;gt;, and quote marks with &amp;quot;." The <code>&amp;</code> replacement must come first.</div>
+
+<h3>Steps</h3>
+<ol>
+<li><span class="step">New workflow</span> <code>WF4 Render report</code>, child trigger, input <code>LobId</code>.</li>
+<li><span class="step">Get a row by ID</span> on LOB Config → rename <code>Get_LOB</code>.</li>
+<li><span class="step">List rows</span> on FolderSummary for this LOB, sorted by Area → rename <code>List_Areas</code>.</li>
+<li><span class="step">List rows</span> on DocCatalog for this LOB where Status is not Deleted. Select only the columns the report needs (<code>rpt_area, rpt_breadcrumb, rpt_filename, rpt_fileurl, rpt_modifiedutc, rpt_status, rpt_summary</code>). Pagination on. Rename <code>List_Files</code>.</li>
+<li><span class="step">Count the files by status:</span> add four <em>Filter array</em> actions on <code>List_Files</code> (Status = Summarized, Pending, Failed, Skipped). The count is <code>length(body('Filter_Summarized'))</code> and so on.
+  <div class="why"><strong>Why:</strong> the report shows these counts at the top, so readers can see whether it covers everything.</div></li>
+<li><span class="step">Select</span> renamed <code>Toc</code> (table of contents), from <code>List_Areas</code>, text mode:
+<pre><code>concat('&lt;li&gt;&lt;a href="#', concat('a-', replace(uriComponent(toLower(item()?['rpt_area'])), '%', '-')), '"&gt;',
+       E(item()?['rpt_area']), ' (', item()?['rpt_filecount'], ')&lt;/a&gt;&lt;/li&gt;')</code></pre>
+  <div class="why"><strong>In plain words:</strong> one link per area, like <em>Protection (42)</em>, pointing to that area's section further down the page. The <code>a-…</code> part turns the area name into a safe link ID.</div></li>
+<li><span class="step">Initialize variable</span> <code>Sections</code>, type Array.</li>
+<li><span class="step">Apply to each</span> over <code>List_Areas</code>. <strong>Settings → Concurrency control OFF.</strong>
+  <div class="box warn"><strong>Important:</strong> if this loop runs in parallel, sections get mixed up or lost when they're added to the variable. This was one of the old bugs. Keep it one-at-a-time.</div>
+  Inside the loop:
+  <ol>
+  <li><em>Filter array</em> on <code>List_Files</code> where Area = the current area → rename <code>Files_In_Area</code>.</li>
+  <li><em>Select</em> renamed <code>FileRows</code> → one table row per file:
+<pre><code>concat('&lt;tr&gt;&lt;td&gt;&lt;a href="', item()?['rpt_fileurl'], '"&gt;', E(item()?['rpt_filename']), '&lt;/a&gt;&lt;/td&gt;',
+       '&lt;td&gt;', E(item()?['rpt_breadcrumb']), '&lt;/td&gt;',
+       '&lt;td&gt;', formatDateTime(item()?['rpt_modifiedutc'],'yyyy-MM-dd'), '&lt;/td&gt;',
+       '&lt;td&gt;', E(item()?['rpt_summary']), '&lt;/td&gt;&lt;/tr&gt;')</code></pre></li>
+  <li><em>Append to array variable</em> <code>Sections</code> → the whole section: a heading, the overview, and a table containing <code>join(body('FileRows'), '')</code>:
+<pre><code>concat('&lt;section id="', [same a-… ID as above], '"&gt;&lt;h2&gt;', E(area name), '&lt;/h2&gt;',
+       '&lt;p class="ov"&gt;', E(overview), '&lt;/p&gt;',
+       '&lt;table&gt;&lt;thead&gt;&lt;tr&gt;&lt;th&gt;File&lt;/th&gt;&lt;th&gt;Folder&lt;/th&gt;&lt;th&gt;Modified&lt;/th&gt;&lt;th&gt;Summary&lt;/th&gt;&lt;/tr&gt;&lt;/thead&gt;',
+       '&lt;tbody&gt;', join(body('FileRows'), ''), '&lt;/tbody&gt;&lt;/table&gt;&lt;/section&gt;')</code></pre></li>
+  </ol></li>
+<li><span class="step">Compose</span> renamed <code>Html</code>: paste the template below. The parts in <code>@{ }</code> are filled in automatically; replace each <code>E(…)</code> with the full escape expression.</li>
+<li><span class="step">Save the file</span> to the <code>Reports</code> folder with the name from <code>ReportFileName</code>. First use "Get file metadata using path" to check whether the file exists; if it does use <strong>Update file</strong>, if not use <strong>Create file</strong>.
+  <div class="why"><strong>Why .aspx?</strong> SharePoint downloads <code>.html</code> files instead of opening them. An <code>.aspx</code> file opens in the browser, but only if the connection used in this step belongs to a <strong>site owner</strong>. The other option is to email or post the <code>.html</code> file to Teams.</div></li>
+<li><span class="step">Update a row</span> on LOB Config: ReportDirty = No, LastReportUtc = <code>utcNow()</code>.</li>
+</ol>
+
+<h3>The HTML template (paste into the <code>Html</code> Compose)</h3>
 <pre><code>&lt;!DOCTYPE html&gt;
 &lt;html lang="en"&gt;&lt;head&gt;&lt;meta charset="utf-8"&gt;
 &lt;title&gt;@{E(LOB name)} – Content report&lt;/title&gt;
@@ -269,50 +314,150 @@ table{border-collapse:collapse;width:100%;margin:8px 0 24px}
 th,td{border-bottom:1px solid #e5e7eb;padding:6px 8px;text-align:left;vertical-align:top}
 th{background:#fafafa}
 .ov{max-width:900px}
-@media print{a{color:#000;text-decoration:none}}
 &lt;/style&gt;&lt;/head&gt;&lt;body&gt;
 &lt;h1&gt;@{E(LOB name)} – Content report&lt;/h1&gt;
 &lt;div class="banner"&gt;Generated @{formatDateTime(utcNow(),'yyyy-MM-dd HH:mm')} UTC ·
- @{TotalFiles} files · @{Summarized} summarized · @{Pending} pending ·
+ @{TotalFiles} files · @{Summarized} summarized · @{Pending} waiting ·
  &lt;span class="warn"&gt;@{Failed} failed&lt;/span&gt; · @{Skipped} not summarizable&lt;/div&gt;
 &lt;h2&gt;Contents&lt;/h2&gt;&lt;ul&gt;@{join(body('Toc'),'')}&lt;/ul&gt;
 @{join(variables('Sections'),'')}
 &lt;/body&gt;&lt;/html&gt;</code></pre>
-<p><strong>Where to publish so it opens in the browser.</strong> SharePoint Online forces <code>.html</code> files in libraries to download. Either save as <code>.aspx</code> using a connection owned by a <strong>site owner</strong> (a member-level connection still downloads), or send <code>.html</code> as a Teams/Outlook attachment from step 9. Choose one per LOB in <code>ReportFileName</code>.</p>
 
-<h2 id="ops">9. Deletes, backfill and go-live</h2>
-<p>The delta query never sees deleted files, so a weekly reconcile keeps reports honest; the first run over existing content is a backlog that drains over several runs.</p>
-<h3>WF5 – Weekly reconcile (scheduled, Sunday night, per LOB)</h3>
+<div class="box test"><strong>Test Part 4:</strong> run WF4 for your test LOB. Open the report: every area from FolderSummary should appear, every summarized file should be listed, and the counts at the top should match DocCatalog. Rename one test file to include <code>&amp;</code> and <code>&lt;</code>, re-run, and check the page still looks right.</div>
+
+<!-- ============================================================ -->
+<h2 id="wf1">Part 5 – WF1 Process LOB</h2>
+<p><strong>Goal:</strong> for one LOB, find files that changed since the last successful run, record them in DocCatalog, then call WF2, WF3 and WF4. This is the main workflow and replaces the old "scan everything" approach.</p>
+<p><strong>Input:</strong> <code>LobId</code>.</p>
+
+<h3>Part A – Setup</h3>
 <ol>
-<li>For each LOB: <strong>Get files (properties only)</strong> with no Modified filter, nested items Yes, pagination On; <strong>Select</strong> the <code>ID</code>s.</li>
-<li><strong>List rows</strong> <code>DocCatalog</code> for the LOB, Status ≠ Deleted, Select <code>rpt_spitemid</code> only, pagination On.</li>
-<li><strong>Filter array</strong> catalog rows where <code>not(contains(body('SpIds'), item()?['rpt_spitemid']))</code> → <strong>Update row</strong> Status = <strong>Deleted</strong>; mark their Area Dirty and LOB ReportDirty = Yes.</li>
+<li><span class="step">New workflow</span> <code>WF1 Process LOB</code>, child trigger, input <code>LobId</code>.</li>
+<li><span class="step">Get a row by ID</span> on LOB Config → rename <code>Get_LOB</code>.</li>
+<li><span class="step">Compose</span> renamed <code>RunStart</code> = <code>utcNow()</code>.
+  <div class="why"><strong>Why:</strong> we record when this run started. If the run succeeds, this becomes the new watermark. We use the <em>start</em> time, not the end time, so files changed <em>during</em> the run are picked up next time.</div></li>
+<li><span class="step">Compose</span> renamed <code>Since</code>:
+<pre><code>formatDateTime(addMinutes(outputs('Get_LOB')?['body/rpt_lastsuccessfulrunutc'], -10), 'yyyy-MM-ddTHH:mm:ssZ')</code></pre>
+  <div class="why"><strong>In plain words:</strong> "the watermark minus 10 minutes, in the date format SharePoint expects." The 10-minute overlap is a safety margin. Files seen twice are harmless, because step 6 checks whether they really changed.</div></li>
 </ol>
-<h3>Backfill (first run)</h3>
+
+<h3>Part B – Find and record changed files (inside a Scope named <code>Try</code>)</h3>
+<ol start="5">
+<li><span class="step">SharePoint "Get files (properties only)"</span> → rename <code>Get_Files</code>:
+  <ul>
+  <li>Library: <code>Documents</code></li>
+  <li>Limit entries to folder: the LOB's <code>FolderPath</code> from <code>Get_LOB</code></li>
+  <li>Include nested items: <strong>Yes</strong> (otherwise it ignores sub-folders)</li>
+  <li>Filter Query: <code>Modified ge '@{outputs('Since')}' and FSObjType eq 0</code><br>
+      <em>Means:</em> "modified on or after <em>Since</em>, and is a file, not a folder." If SharePoint rejects <code>FSObjType</code>, delete that part and later skip items where <code>{IsFolder}</code> is true.</li>
+  <li>Settings → <strong>Pagination on</strong>, threshold 20000.</li>
+  </ul></li>
+<li><span class="step">Apply to each</span> file in <code>Get_Files</code> (Settings → Concurrency 10). Inside:
+  <ol>
+  <li><em>Compose</em> <code>Parts</code> = <code>split(item()?['{Path}'], '/')</code><br>
+      <em>Means:</em> cut the folder path into pieces. <code>Shared Documents/Transmission/Protection/Relays/</code> becomes <code>["Shared Documents","Transmission","Protection","Relays",""]</code>. Position 0 is the library, 1 is the LOB, 2 is the Area.</li>
+  <li><em>Compose</em> <code>Area</code> = <code>if(greater(length(outputs('Parts')), 3), outputs('Parts')[2], 'General')</code><br>
+      <em>Means:</em> take piece number 2 as the area. Files sitting directly in the LOB folder (no area) go into an area called "General".</li>
+  <li><em>Compose</em> <code>Breadcrumb</code> = <code>join(take(skip(outputs('Parts'), 3), max(0, sub(length(outputs('Parts')), 4))), ' / ')</code><br>
+      <em>Means:</em> join every folder below the area with " / ", e.g. <code>Relays / 2026 / Q3</code>.</li>
+  <li><em>List rows</em> on DocCatalog where <code>rpt_spitemid eq @{item()?['ID']}</code>, row count 1 → rename <code>Find_Existing</code>. (<em>Do we already have a row for this file?</em>)</li>
+  <li><em>Condition</em>: <code>empty(outputs('Find_Existing')?['body/value'])</code>
+    <ul>
+    <li><strong>Yes (new file):</strong> <em>Add a new row</em> to DocCatalog with SpItemId, LOB, Area, Breadcrumb, FileName (<code>{Name}</code>), FileUrl (<code>{Link}</code>), ETag (<code>item()?['@odata.etag']</code>), ModifiedUtc, ModifiedBy, Status = Pending, Attempts = 0.</li>
+    <li><strong>No (known file):</strong> another Condition. Is the saved ETag different from <code>item()?['@odata.etag']</code>? If yes, the file really changed: <em>Update the row</em> with the same fields, Status = Pending, Attempts = 0. If no, do nothing.</li>
+    </ul></li>
+  </ol>
+  <div class="box warn"><strong>Folder positions:</strong> the numbers 2 and 3 above assume <code>Library/LOB/Area/…</code>. If your LOB folders are one level deeper (e.g. <code>Library/Business/LOB/Area</code>), add 1 to each of those numbers.</div></li>
+<li><span class="step">Mark changed areas as Dirty.</span> Add a <em>Select</em> <code>ChangedAreas</code> over <code>Get_Files</code> that outputs each file's area (same expression as step 6.2 but using <code>split(item()?['{Path}'],'/')</code> directly). Then a <em>Compose</em> <code>DistinctAreas</code> = <code>union(body('ChangedAreas'), body('ChangedAreas'))</code> (removes duplicates). Loop over DistinctAreas (<strong>concurrency 1</strong>) and for each one add or update the FolderSummary row for this LOB + Area with <strong>Dirty = Yes</strong>.</li>
+<li><span class="step">If any files were found</span> (<code>greater(length(body('Get_Files')?['value']), 0)</code>), update LOB Config: ReportDirty = Yes.</li>
+</ol>
+
+<h3>Part C – Summarize, roll up, render (still inside <code>Try</code>)</h3>
+<ol start="9">
+<li><span class="step">List rows</span> on DocCatalog: this LOB, Status = Pending, sorted by ModifiedUtc ascending, <strong>row count = BatchSize</strong> → rename <code>Pending_Files</code>.
+  <div class="why"><strong>Why a batch size?</strong> On the first run there may be thousands of Pending files. Limiting each run to e.g. 100 keeps runs short and costs predictable; the rest are picked up by the next runs.</div></li>
+<li><span class="step">Apply to each</span> pending file (concurrency 5) → <strong>Run a child workflow</strong>: WF2, passing the row's ID as <code>CatalogId</code>.</li>
+<li><span class="step">List rows</span> on FolderSummary: this LOB, Dirty = Yes → <span class="step">Apply to each</span> (concurrency 3) → <strong>Run a child workflow</strong>: WF3 with the row's ID.</li>
+<li><span class="step">Get the LOB Config row again</span> (it may have changed). If ReportDirty = Yes → <strong>Run a child workflow</strong>: WF4 with <code>LobId</code>.</li>
+<li><span class="step">Update LOB Config:</span> LastSuccessfulRunUtc = <code>outputs('RunStart')</code>. <strong>This is the last step inside Try.</strong></li>
+<li><span class="step">Add a RunLog row</span> with Outcome = Succeeded and the counts.</li>
+</ol>
+
+<h3>Part D – Handle failures (Scope named <code>Catch</code>)</h3>
+<ol start="15">
+<li>Add a Scope <code>Catch</code> after Try, with <em>Run after</em> = <strong>has failed</strong> and <strong>has timed out</strong>. Inside, add a RunLog row with Outcome = Failed and ErrorText = <code>string(result('Try'))</code>.
+  <div class="box warn"><strong>Do not update the watermark in Catch.</strong> Because the watermark only moves at the end of a successful Try, a failed run is simply repeated next time and no file is missed.</div></li>
+</ol>
+
+<div class="box test"><strong>Test Part 5:</strong> run WF1 for your test LOB (watermark 1900-01-01). Check that DocCatalog now has one row per file, files get summarized up to BatchSize, and a report is produced. Then: edit one file in SharePoint, run WF1 again, and confirm <em>only</em> that file was re-summarized (check RunLog counts).</div>
+
+<!-- ============================================================ -->
+<h2 id="wf0">Part 6 – WF0 Orchestrator</h2>
+<p><strong>Goal:</strong> every 30 minutes, start WF1 for each enabled LOB. It does nothing else.</p>
+<ol>
+<li><span class="step">New workflow</span> <code>WF0 Orchestrator</code> with a <strong>Recurrence</strong> trigger every 30 minutes. In the trigger's Settings turn <strong>Concurrency control on</strong> and set the limit to <strong>1</strong>.
+  <div class="why"><strong>Why:</strong> if one run takes longer than 30 minutes, the next one waits instead of running at the same time and processing the same files twice.</div></li>
+<li><span class="step">List rows</span> on LOB Config where <code>rpt_enabled eq true</code>.</li>
+<li><span class="step">Apply to each</span> LOB (Settings → Concurrency 3) → <strong>Run a child workflow</strong>: WF1 with the LOB's ID.</li>
+<li>On anything after the child call, set <em>Run after</em> to include <strong>has failed</strong>, so one failed LOB doesn't stop the others.</li>
+</ol>
+<div class="box test"><strong>Test Part 6:</strong> enable two LOBs, turn WF0 on, wait for one run, and check RunLog has a row for each LOB.</div>
+
+<!-- ============================================================ -->
+<h2 id="wf5">Part 7 – WF5 Weekly reconcile</h2>
+<p><strong>Goal:</strong> find files that were deleted from SharePoint. WF1 can't see deletions, because it only asks "what was modified?", and a deleted file isn't there to be asked about.</p>
+<ol>
+<li><span class="step">New workflow</span> <code>WF5 Weekly reconcile</code>, Recurrence trigger weekly (e.g. Sunday 2 AM).</li>
+<li>For each enabled LOB: <strong>Get files (properties only)</strong> with <em>no</em> date filter, nested items Yes, pagination on. Add a <em>Select</em> <code>SpIds</code> that outputs just <code>item()?['ID']</code>.</li>
+<li><strong>List rows</strong> on DocCatalog for the LOB where Status is not Deleted (select only <code>rpt_spitemid</code>, pagination on).</li>
+<li><strong>Filter array</strong> on those rows where <code>not(contains(body('SpIds'), item()?['rpt_spitemid']))</code>. <em>Means:</em> "rows whose file is no longer in SharePoint."</li>
+<li>For each of them: <strong>Update a row</strong> Status = Deleted, mark its area Dirty, and set the LOB's ReportDirty = Yes.</li>
+</ol>
+<div class="box test"><strong>Test Part 7:</strong> delete a test file in SharePoint, run WF5 manually, then run WF1. The file should be gone from the report.</div>
+
+<!-- ============================================================ -->
+<h2 id="golive">Part 8 – First run and go-live</h2>
+<h3>The first run (backfill)</h3>
 <ul>
-<li>Seed every LOB's <code>LastSuccessfulRunUtc</code> with <code>1900-01-01</code>: run 1 catalogs every file as Pending.</li>
-<li><code>BatchSize</code> caps summarizing per run, so the backlog drains over the next runs. The report banner shows the Pending count meanwhile.</li>
-<li>To finish faster, run once overnight with <code>BatchSize</code> 500 and the WF1 step 10 concurrency at 10.</li>
+<li>Each new LOB starts with watermark <code>1900-01-01</code>, so its first run records <em>every</em> file as Pending.</li>
+<li>Summaries then fill in at <code>BatchSize</code> files per run. Until they're done, the report shows a "waiting" count at the top. This is expected.</li>
+<li>To finish faster, run once overnight with BatchSize 500 and the WF2 loop concurrency at 10.</li>
 </ul>
-<h3>Solution and settings</h3>
+<h3>Settings to double-check</h3>
 <ul>
-<li>One solution: all workflows, 4 tables, <strong>connection references</strong> (SharePoint, Dataverse) and <strong>environment variables</strong> for the site URL, library name and file-size cap.</li>
-<li>Retry policy <em>Exponential, 4</em> on every SharePoint and prompt action.</li>
-<li>Every action consumes Copilot Credits; the incremental design and ETag check are what keep cost proportional to change, not to site size.</li>
-<li>In the template, replace each <code>E(…)</code> shorthand with the full escape expression.</li>
+<li>Everything is in the solution, using <strong>connection references</strong> (for SharePoint and Dataverse) and <strong>environment variables</strong> for the site URL and library name.</li>
+<li>Retry policy Exponential (4) on every SharePoint and AI action.</li>
+<li>Every action uses Copilot Credits. Processing only changed files is what keeps the cost low.</li>
 </ul>
-<h3>Test checklist before switching off the old 10 flows</h3>
+<h3>Go-live checklist</h3>
 <ul class="check">
-<li>One LOB enabled; backfill completes; banner totals match the file count in SharePoint for that LOB folder.</li>
-<li>Edit one file → next run re-summarizes only that file; its Area section updates; others unchanged.</li>
-<li>Add a file 4 levels deep → appears under the right Area with the correct breadcrumb.</li>
-<li>A file named with <code>&amp;</code> and <code>&lt;</code> renders correctly (escape check).</li>
-<li>Force a prompt failure (unsupported or corrupt file) → row goes Failed after 3 tries; banner shows it; report still renders.</li>
-<li>Delete a file → gone from the report after the weekly reconcile.</li>
-<li>Kill a run mid-way → watermark did not move; next run reprocesses the window.</li>
-<li>Report opens in the browser (not downloaded) for a normal member account.</li>
-<li>Enable the remaining LOBs one at a time.</li>
+<li>One LOB fully backfilled; report file count matches the number of files in its SharePoint folder.</li>
+<li>Editing one file re-summarizes only that file.</li>
+<li>A file 4 folders deep appears in the right area with the right breadcrumb.</li>
+<li>A file name containing <code>&amp;</code> and <code>&lt;</code> displays correctly.</li>
+<li>A broken file ends up Failed after 3 tries, is shown in the count, and the report still builds.</li>
+<li>A deleted file disappears after WF5 runs.</li>
+<li>Stopping a run halfway does not move the watermark, and the next run catches up.</li>
+<li>A normal team member can open the report in the browser (it doesn't download).</li>
+<li>Remaining LOBs enabled one at a time; the old 10 flows turned off.</li>
 </ul>
+
+<!-- ============================================================ -->
+<h2 id="trouble">Troubleshooting</h2>
+<table>
+<tr><th>What you see</th><th>Likely cause</th><th>What to do</th></tr>
+<tr><td>Get files fails with a "threshold" or "list view" error</td><td><code>Modified</code> column not indexed</td><td>Index it in Library settings (see Before you start)</td></tr>
+<tr><td>Expression error "action 'X' not found"</td><td>An action wasn't renamed as in this guide</td><td>Rename the action, or change the name inside the expression</td></tr>
+<tr><td>Only some files appear in DocCatalog</td><td>Pagination is off</td><td>Turn on pagination on every Get files / List rows action</td></tr>
+<tr><td>No files from sub-folders</td><td>"Include nested items" is No</td><td>Set it to Yes</td></tr>
+<tr><td>Files land in the wrong Area</td><td>Folder positions don't match your layout</td><td>Adjust the 2 / 3 / 4 numbers in Part 5, step 6</td></tr>
+<tr><td>Report sections missing or in the wrong order</td><td>The WF4 loop runs in parallel</td><td>Set that loop's concurrency off (one at a time)</td></tr>
+<tr><td>Report layout broken</td><td>A value wasn't escaped</td><td>Wrap every inserted text in the <code>E(…)</code> expression</td></tr>
+<tr><td>Report downloads instead of opening</td><td>Saved as <code>.html</code>, or saved with a non-owner connection</td><td>Save as <code>.aspx</code> with a site-owner connection, or send it by Teams/email</td></tr>
+<tr><td>Many files stuck as Failed</td><td>File too large, password-protected, or unsupported</td><td>Check <code>LastError</code> on the rows; add the type to the Skipped list if needed</td></tr>
+<tr><td>Error 429 "too many requests"</td><td>SharePoint or AI throttling</td><td>Check retry policies are set; lower loop concurrency</td></tr>
+<tr><td>Same files processed every run</td><td>Watermark never updates (run keeps failing)</td><td>Check RunLog for the error; fix it, and the watermark moves on the next success</td></tr>
+</table>
 
 </body>
 </html>

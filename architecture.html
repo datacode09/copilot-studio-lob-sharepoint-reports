@@ -6,34 +6,55 @@
 <title>Architecture – LOB SharePoint HTML Reports (Copilot Studio)</title>
 <style>
   :root{--ink:#1f2328;--quiet:#59636e;--line:#d0d7de;--accent:#0969da;--tint:#f6f8fa}
-  body{font:15px/1.6 "Segoe UI",system-ui,-apple-system,Arial,sans-serif;color:var(--ink);max-width:920px;margin:40px auto;padding:0 24px}
-  h1{font-size:28px;margin:0 0 4px}
-  h2{font-size:20px;margin:32px 0 8px;border-bottom:1px solid var(--line);padding-bottom:4px}
+  body{font:16px/1.65 "Segoe UI",system-ui,-apple-system,Arial,sans-serif;color:var(--ink);max-width:900px;margin:40px auto;padding:0 24px}
+  h1{font-size:30px;margin:0 0 4px}
+  h2{font-size:22px;margin:40px 0 10px;border-bottom:1px solid var(--line);padding-bottom:4px}
+  h3{font-size:17px;margin:22px 0 6px}
   .sub{color:var(--quiet);margin:0 0 24px}
-  table{border-collapse:collapse;width:100%;margin:8px 0 16px}
-  th,td{border-bottom:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top}
+  table{border-collapse:collapse;width:100%;margin:10px 0 18px;font-size:15px}
+  th,td{border-bottom:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
   th{background:var(--tint)}
-  code{background:var(--tint);padding:1px 5px;border-radius:4px;font-size:13px}
-  .callout{background:#ddf4ff;border:1px solid #54aeff;border-radius:8px;padding:12px 16px}
-  svg{width:100%;height:auto}
+  code{background:var(--tint);padding:1px 5px;border-radius:4px;font-size:14px}
+  .box{border-radius:8px;padding:12px 16px;margin:14px 0}
+  .idea{background:#ddf4ff;border:1px solid #54aeff}
+  .why{background:#f6f8fa;border-left:4px solid #8c959f}
+  .warn{background:#fff8c5;border:1px solid #d4a72c}
+  svg{width:100%;height:auto;margin:8px 0}
   a{color:var(--accent)}
+  li{margin:4px 0}
 </style>
 </head>
 <body>
 
-<h1>LOB SharePoint HTML Reports – Architecture</h1>
-<p class="sub">Copilot Studio (Microsoft Copilot harness) · one HTML report per line of business · see <a href="rebuild-spec.html">the full rebuild spec</a> for node-by-node build steps.</p>
+<h1>How the LOB report system works</h1>
+<p class="sub">A plain-language overview for developers new to this project · 10-minute read · build instructions are in <a href="rebuild-spec.html">the build guide</a></p>
 
-<div class="callout"><strong>In one sentence:</strong> scheduled workflows process only the files that changed in each LOB, summarize each file once into Dataverse, and render each LOB's report from stored summaries with a fixed template. No retrieval (RAG) and no AI-written HTML.</div>
+<div class="box idea"><strong>The whole idea in one sentence:</strong> instead of re-reading every SharePoint file every time, we keep a list of all files and a short summary of each one, update only the files that changed, and build each team's report from that list.</div>
 
-<h2>Why the old design failed</h2>
-<ul>
-  <li><strong>RAG can't produce a complete report.</strong> Retrieval returns the top few chunks, so a report over hundreds of folders silently leaves most content out and changes from run to run.</li>
-  <li><strong>Full scans every run</strong> hit the 100-second agent-flow limit, SharePoint throttling (600 calls/min) and model context limits.</li>
-  <li><strong>The AI writing HTML</strong> runs into output-token limits and truncates the report; unescaped characters break it.</li>
-</ul>
+<h2>1. What we are building</h2>
+<p>Our SharePoint library has a folder for each <strong>line of business (LOB)</strong>, for example Transmission or Distribution. Each LOB folder has many sub-folders, and those have more sub-folders, with new files added every day.</p>
+<p>Each LOB needs <strong>one HTML report</strong> that lists its files, grouped by area, with a short summary of every file and an overview of every area.</p>
+<p>We build this with <strong>Copilot Studio workflows</strong> (automations, similar to Power Automate flows) and <strong>Dataverse</strong> (a database that comes with Power Platform).</p>
 
-<h2>Components</h2>
+<h2>2. Why the old version broke</h2>
+<p>The old version had three problems:</p>
+<table>
+<tr><th>Problem</th><th>What happened</th><th>Simple explanation</th></tr>
+<tr><td>It read everything, every run</td><td>Runs got slower as the site grew, then timed out or got throttled</td><td>Like re-reading a whole library to find out which books are new</td></tr>
+<tr><td>It used search (RAG) to write the report</td><td>Reports were missing content and changed from run to run</td><td>Search returns only the "top few" matches, never <em>all</em> files, so it can't produce a complete list</td></tr>
+<tr><td>The AI wrote the HTML</td><td>Reports were cut off halfway or had broken layout</td><td>AI models have a maximum answer length; a long report is longer than that</td></tr>
+</table>
+
+<h2>3. The new design in four steps</h2>
+<p>Think of a librarian with a card catalog. They don't re-read every book each morning. They write one card per book, update a card only when a book changes, and print the catalog from the cards.</p>
+<ol>
+<li><strong>Find what changed.</strong> Every 30 minutes, for each LOB, ask SharePoint: "which files changed since my last successful check?" Only those files are processed.</li>
+<li><strong>Summarize each changed file once.</strong> The AI reads one file and writes a short summary. We save it in Dataverse. If the file doesn't change, we never summarize it again.</li>
+<li><strong>Summarize each area.</strong> For areas that had changes, the AI reads the saved file summaries (not the files) and writes a short area overview.</li>
+<li><strong>Build the report without AI.</strong> A workflow takes the saved summaries and puts them into a fixed HTML template, the same way a mail-merge fills in a letter. Because a template builds it, the HTML is always complete and well-formed.</li>
+</ol>
+
+<h2>4. The pieces and how they connect</h2>
 <svg viewBox="0 0 760 440" role="img" aria-label="One child run per LOB, touching only changed files" font-family="Segoe UI, Arial, sans-serif" font-size="13">
   <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8c959f"/></marker></defs>
   <text x="24" y="34" font-size="15" font-weight="600" fill="#1f2328">One child run per LOB, touching only changed files</text>
@@ -52,58 +73,72 @@
   <text x="648" y="104" text-anchor="middle" font-size="11.5" fill="#59636e">marks deleted files</text>
   <rect x="130" y="156" width="360" height="56" rx="8" fill="#ddf4ff" stroke="#0969da" stroke-width="2"/>
   <text x="310" y="180" text-anchor="middle" font-weight="600" fill="#1f2328">WF1 Process LOB</text>
-  <text x="310" y="196" text-anchor="middle" font-size="11.5" fill="#1f2328">Delta since watermark, queue changed files</text>
+  <text x="310" y="196" text-anchor="middle" font-size="11.5" fill="#1f2328">Find changed files, then run the next three</text>
   <rect x="40" y="256" width="196" height="72" rx="8" fill="#fff" stroke="#8c959f" stroke-width="1.25"/>
   <text x="138" y="280" text-anchor="middle" font-weight="600" fill="#1f2328">WF2 Summarize file</text>
-  <text x="138" y="296" text-anchor="middle" font-size="11.5" fill="#59636e">one prompt per file</text>
-  <text x="138" y="312" text-anchor="middle" font-size="11.5" fill="#59636e">JSON into DocCatalog</text>
+  <text x="138" y="296" text-anchor="middle" font-size="11.5" fill="#59636e">AI summary of one file</text>
+  <text x="138" y="312" text-anchor="middle" font-size="11.5" fill="#59636e">saved to DocCatalog</text>
   <rect x="252" y="256" width="196" height="72" rx="8" fill="#fff" stroke="#8c959f" stroke-width="1.25"/>
   <text x="350" y="280" text-anchor="middle" font-weight="600" fill="#1f2328">WF3 Roll up area</text>
-  <text x="350" y="296" text-anchor="middle" font-size="11.5" fill="#59636e">only changed Areas</text>
-  <text x="350" y="312" text-anchor="middle" font-size="11.5" fill="#59636e">into FolderSummary</text>
+  <text x="350" y="296" text-anchor="middle" font-size="11.5" fill="#59636e">AI overview of one area</text>
+  <text x="350" y="312" text-anchor="middle" font-size="11.5" fill="#59636e">saved to FolderSummary</text>
   <rect x="464" y="256" width="196" height="72" rx="8" fill="#fff" stroke="#8c959f" stroke-width="1.25"/>
   <text x="562" y="280" text-anchor="middle" font-weight="600" fill="#1f2328">WF4 Render report</text>
-  <text x="562" y="296" text-anchor="middle" font-size="11.5" fill="#59636e">Select + Join, no AI</text>
-  <text x="562" y="312" text-anchor="middle" font-size="11.5" fill="#59636e">one HTML file per LOB</text>
+  <text x="562" y="296" text-anchor="middle" font-size="11.5" fill="#59636e">fills the HTML template</text>
+  <text x="562" y="312" text-anchor="middle" font-size="11.5" fill="#59636e">no AI in this step</text>
   <rect x="24" y="368" width="712" height="48" rx="8" fill="#f6f8fa" stroke="#8c959f" stroke-width="1.25"/>
-  <text x="380" y="396" text-anchor="middle" fill="#1f2328">Dataverse: LOB Config · DocCatalog · FolderSummary · RunLog</text>
+  <text x="380" y="396" text-anchor="middle" fill="#1f2328">Dataverse tables: LOB Config · DocCatalog · FolderSummary · RunLog</text>
 </svg>
+<p>The arrows show who calls whom. <strong>WF0</strong> runs on a timer and starts <strong>WF1</strong> once for each LOB. WF1 finds the changed files and then calls <strong>WF2</strong>, <strong>WF3</strong> and <strong>WF4</strong>, in that order. Every workflow reads and writes the Dataverse tables. <strong>WF5</strong> runs once a week to catch deleted files.</p>
 
+<h3>What each workflow does</h3>
 <table>
-  <thead><tr><th>Workflow</th><th>Trigger</th><th>Responsibility</th></tr></thead>
-  <tbody>
-    <tr><td>WF0 Orchestrator</td><td>Recurrence, 30 min, concurrency 1</td><td>Calls WF1 once per enabled LOB</td></tr>
-    <tr><td>WF1 Process LOB</td><td>Child</td><td>Lists files modified since the LOB's watermark, queues changed files, calls WF2 → WF3 → WF4, then moves the watermark only on success</td></tr>
-    <tr><td>WF2 Summarize file</td><td>Child</td><td>One prompt per file → validated JSON summary; retries, then marks Failed</td></tr>
-    <tr><td>WF3 Roll up area</td><td>Child</td><td>Area overview from stored file summaries only (batched over 60 files)</td></tr>
-    <tr><td>WF4 Render report</td><td>Child</td><td>Select/Join + fixed template → one escaped, well-formed HTML file per LOB</td></tr>
-    <tr><td>WF5 Weekly reconcile</td><td>Recurrence, weekly</td><td>Marks deleted files so reports stay accurate</td></tr>
-  </tbody>
+<tr><th>Workflow</th><th>Starts when</th><th>What it does</th></tr>
+<tr><td>WF0 Orchestrator</td><td>Every 30 minutes</td><td>Gets the list of LOBs and starts WF1 for each one. Does nothing else.</td></tr>
+<tr><td>WF1 Process LOB</td><td>Called by WF0</td><td>Asks SharePoint which files in this LOB changed, records them, then calls WF2, WF3 and WF4.</td></tr>
+<tr><td>WF2 Summarize file</td><td>Called by WF1, once per changed file</td><td>Reads one file, asks the AI for a short summary, saves it.</td></tr>
+<tr><td>WF3 Roll up area</td><td>Called by WF1, once per changed area</td><td>Reads the saved file summaries of one area, asks the AI for an overview, saves it.</td></tr>
+<tr><td>WF4 Render report</td><td>Called by WF1 if anything changed</td><td>Builds the HTML report for the LOB from saved data and saves the file.</td></tr>
+<tr><td>WF5 Weekly reconcile</td><td>Once a week</td><td>Compares our list with SharePoint and marks deleted files.</td></tr>
 </table>
 
-<h2>Data model (Dataverse)</h2>
+<h3>What each table stores</h3>
 <table>
-  <thead><tr><th>Table</th><th>Grain</th><th>Purpose</th></tr></thead>
-  <tbody>
-    <tr><td>LOB Config</td><td>1 per LOB</td><td>Folder path, enabled flag, watermark, batch size, report file name, dirty flag</td></tr>
-    <tr><td>DocCatalog</td><td>1 per file</td><td>Path, Area, breadcrumb, ETag, status (Pending/Summarized/Failed/Skipped/Deleted), summary JSON</td></tr>
-    <tr><td>FolderSummary</td><td>1 per LOB + Area</td><td>Section overview, themes, coverage counts, dirty flag</td></tr>
-    <tr><td>RunLog</td><td>1 per LOB per run</td><td>Counts, outcome, errors, duration</td></tr>
-  </tbody>
+<tr><th>Table</th><th>One row per</th><th>Main things it holds</th></tr>
+<tr><td>LOB Config</td><td>LOB</td><td>The LOB's folder, whether it's switched on, and when it was last processed successfully</td></tr>
+<tr><td>DocCatalog</td><td>File</td><td>File name and link, which area it belongs to, its status, and its AI summary</td></tr>
+<tr><td>FolderSummary</td><td>Area inside a LOB</td><td>The AI overview of the area and how many files it has</td></tr>
+<tr><td>RunLog</td><td>Run of one LOB</td><td>How many files were processed, whether the run succeeded, and any error</td></tr>
 </table>
 
-<h2>Design rules</h2>
+<h2>5. Words you will see</h2>
+<table>
+<tr><th>Term</th><th>Meaning</th></tr>
+<tr><td>LOB</td><td>Line of business, a top-level folder in the library. Each LOB gets one report.</td></tr>
+<tr><td>Area</td><td>A sub-folder directly inside a LOB folder. Each area becomes one section of the report.</td></tr>
+<tr><td>Breadcrumb</td><td>The deeper folder path below the area, e.g. <code>Relays / 2026 / Q3</code>, shown next to each file.</td></tr>
+<tr><td>Watermark</td><td>The date and time of the last successful run for a LOB. "Changed files" means "modified after the watermark."</td></tr>
+<tr><td>ETag</td><td>A version tag SharePoint gives every file. It changes whenever the file changes, so we compare it to know if a file really changed.</td></tr>
+<tr><td>Child workflow</td><td>A workflow that another workflow calls, like a function call in code.</td></tr>
+<tr><td>Status</td><td>Where a file is in the process: <em>Pending</em> (waiting for a summary), <em>Summarized</em>, <em>Failed</em> (AI couldn't summarize it after 3 tries), <em>Skipped</em> (file type we don't summarize), <em>Deleted</em>.</td></tr>
+<tr><td>Dirty</td><td>A yes/no flag meaning "something here changed and needs to be rebuilt."</td></tr>
+<tr><td>Escaping</td><td>Replacing characters like <code>&lt;</code> and <code>&amp;</code> with safe codes so a file name can't break the HTML.</td></tr>
+<tr><td>RAG</td><td>Retrieval-augmented generation: the AI searches for a few relevant pieces of text and answers from those. Good for questions, bad for complete reports.</td></tr>
+</table>
+
+<h2>6. Rules to keep (and why)</h2>
 <ol>
-  <li><strong>Per-LOB isolation:</strong> each LOB has its own child run and watermark; one failure never blocks the others.</li>
-  <li><strong>Incremental only:</strong> filter on <code>Modified ge watermark − 10 min</code> (index the <code>Modified</code> column); ETag decides whether to re-summarize.</li>
-  <li><strong>Summarize once:</strong> unchanged files cost nothing on later runs; a per-run batch cap drains backlogs predictably.</li>
-  <li><strong>Deterministic rendering:</strong> the AI never writes HTML; every inserted value is escaped; the append loop runs with concurrency 1.</li>
-  <li><strong>Trustworthy output:</strong> each report opens with a coverage banner (total · summarized · pending · failed · skipped).</li>
-  <li><strong>Safe failure:</strong> Try/Catch scopes; the watermark only moves on success, so a failed run is retried in full.</li>
+<li><strong>Never scan the whole library in the normal run.</strong> Why: it's what made the old version slow and fail. Only WF5 does a full scan, once a week.</li>
+<li><strong>Never let the AI write HTML.</strong> Why: AI answers have a length limit, and a long report gets cut off. The template is the only thing that writes HTML.</li>
+<li><strong>Only move the watermark after a successful run.</strong> Why: if a run fails halfway, the next run should redo the same time window so no file is missed.</li>
+<li><strong>Escape every value you put into HTML.</strong> Why: one file named <code>Q3 &lt;draft&gt; &amp; notes</code> can break the whole page.</li>
+<li><strong>Keep each LOB separate.</strong> Why: if one LOB has a problem, the others still get their reports.</li>
 </ol>
 
-<h2>Publishing note</h2>
-<p>SharePoint Online downloads <code>.html</code> files rather than rendering them. Save reports as <code>.aspx</code> with a site-owner connection, or deliver the <code>.html</code> as a Teams/Outlook attachment.</p>
+<div class="box warn"><strong>Good to know:</strong> SharePoint downloads <code>.html</code> files instead of showing them in the browser. So we save reports as <code>.aspx</code> (with a site-owner connection) or send them as a Teams/Outlook attachment.</div>
+
+<h2>7. Where to go next</h2>
+<p>Open <a href="rebuild-spec.html">the build guide</a>. It walks through creating the tables and each workflow step by step, in the order you should build them, with a test after each one.</p>
 
 </body>
 </html>
